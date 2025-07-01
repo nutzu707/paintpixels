@@ -17,6 +17,8 @@ import {
   CircleIcon,
   RectangleHorizontalIcon,
   DiamondIcon,
+  // Add Trash2Icon for clear canvas
+  Trash2Icon,
 } from "lucide-react";
 
 const DEFAULT_GRID_WIDTH = 16;
@@ -183,6 +185,10 @@ export default function Paint() {
 
   const dragStartGrid = useRef<string[][] | null>(null);
   const isDragPainting = useRef<boolean>(false);
+
+  // --- Add state for clear canvas confirmation ---
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  // ---
 
   const pushUndo = useCallback((newGrid: string[][]) => {
     undoStack.current.push(grid.map((row) => [...row]));
@@ -538,6 +544,17 @@ export default function Paint() {
     forceUpdate((v) => v + 1);
   }, [grid]);
 
+  // --- Add clear canvas handler ---
+  const handleClearCanvas = useCallback(() => {
+    // Push current grid to undo stack for undo support
+    undoStack.current.push(grid.map((row) => [...row]));
+    redoStack.current = [];
+    setGrid(createGrid(gridWidth, gridHeight));
+    forceUpdate((v) => v + 1);
+    setShowClearConfirm(false); // Hide confirmation after clearing
+  }, [grid, gridWidth, gridHeight]);
+  // ---
+
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (e.ctrlKey) return;
     e.preventDefault();
@@ -741,6 +758,21 @@ export default function Paint() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showShapeMenu]);
+
+  // --- Dismiss clear confirm popup on outside click ---
+  useEffect(() => {
+    if (!showClearConfirm) return;
+    function handleClickOutside(e: MouseEvent) {
+      // Only close if click is outside the popup
+      const popup = document.getElementById("clear-canvas-confirm-popup");
+      if (popup && !popup.contains(e.target as Node)) {
+        setShowClearConfirm(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showClearConfirm]);
+  // ---
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1282,6 +1314,36 @@ export default function Paint() {
           >
             <Redo2Icon size={20} />
           </button>
+          {/* --- Clear Canvas Button --- */}
+          <button
+            onClick={() => setShowClearConfirm(true)}
+            className="border rounded px-2 py-1 font-mono flex items-center justify-center transition bg-white border-gray-300 hover:bg-red-100 active:bg-red-200"
+            aria-label="Clear canvas"
+            style={{
+              minWidth: 32,
+              height: 40,
+              borderRadius: "0.5rem",
+              outline: "none",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.13)",
+              cursor: "pointer",
+              color: "#b91c1c",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontWeight: 600,
+              fontSize: 15,
+              paddingLeft: 10,
+              paddingRight: 10,
+            }}
+            title="Clear canvas (sets all cells to transparent)"
+            tabIndex={0}
+          >
+            <Trash2Icon size={20} />
+            <span className="hidden sm:inline" style={{ marginLeft: 6, fontWeight: 600, fontSize: 15 }}>
+              Delete
+            </span>
+          </button>
+          {/* --- End Clear Canvas Button --- */}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -1376,6 +1438,48 @@ export default function Paint() {
           </button>
         </div>
       </div>
+
+      {/* --- Clear Canvas Confirmation Popup --- */}
+      {showClearConfirm && (
+        <div
+          id="clear-canvas-confirm-popup"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+          style={{ backdropFilter: "blur(1.5px)" }}
+        >
+          <div
+            className="bg-white border-2 border-red-300 rounded-lg shadow-lg flex flex-col items-center px-8 py-6"
+            style={{ minWidth: 320, maxWidth: "90vw" }}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <Trash2Icon size={28} color="#b91c1c" />
+              <span className="font-bold text-lg text-red-700">Delete All?</span>
+            </div>
+            <div className="mb-6 text-gray-700 text-center font-mono text-base">
+              Are you sure you want to clear the canvas? <br />
+              <span className="text-red-600 font-semibold">This cannot be undone.</span>
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={handleClearCanvas}
+                className="px-5 py-2 rounded bg-red-600 text-white font-bold font-mono border border-red-700 shadow hover:bg-red-700 transition"
+                style={{ fontSize: 16 }}
+                autoFocus
+              >
+                Yes, Delete
+              </button>
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="px-5 py-2 rounded bg-gray-100 text-gray-800 font-mono border border-gray-300 shadow hover:bg-gray-200 transition"
+                style={{ fontSize: 16 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* --- End Clear Canvas Confirmation Popup --- */}
+
       {showResizeMenu && (
         <div
           ref={resizeMenuRef}
@@ -1783,6 +1887,12 @@ export default function Paint() {
           </button>
         </div>
       </div>
+
+
+
+      {/* --- END BOTTOM MENU --- */}
+
+
     </div>
   );
 }
