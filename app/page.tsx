@@ -5,7 +5,7 @@ export default function Home() {
     <div
       className="flex min-h-screen w-screen font-mono overflow-hidden"
       style={{
-        backgroundColor: "#f3f4f6", // Tailwind gray-100 (lighter)
+        backgroundColor: "#f3f4f6", 
         backgroundImage:
           "radial-gradient(rgba(0,0,0,0.055) 2px, transparent 2px), radial-gradient(rgba(0,0,0,0.04) 2px, transparent 2px)",
         backgroundSize: "18px 18px",

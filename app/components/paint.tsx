@@ -190,6 +190,22 @@ export default function Paint() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   // ---
 
+  // --- Warn user before leaving or refreshing the page ---
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Show a confirmation dialog
+      e.preventDefault();
+      // Chrome requires returnValue to be set
+      e.returnValue = "Are you sure you want to leave? All your progress will be lost.";
+      return "Are you sure you want to leave? All your progress will be lost.";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
+  // ---
+
   const pushUndo = useCallback((newGrid: string[][]) => {
     undoStack.current.push(grid.map((row) => [...row]));
     redoStack.current = [];
@@ -1317,7 +1333,7 @@ export default function Paint() {
           {/* --- Clear Canvas Button --- */}
           <button
             onClick={() => setShowClearConfirm(true)}
-            className="border rounded px-2 py-1 font-mono flex items-center justify-center transition bg-white border-gray-300 hover:bg-red-100 active:bg-red-200"
+            className="border rounded ml-2 px-2 py-1 font-mono flex items-center justify-center transition bg-white border-gray-300 hover:bg-red-100 active:bg-red-200"
             aria-label="Clear canvas"
             style={{
               minWidth: 32,
@@ -1339,8 +1355,8 @@ export default function Paint() {
             tabIndex={0}
           >
             <Trash2Icon size={20} />
-            <span className="hidden sm:inline" style={{ marginLeft: 6, fontWeight: 600, fontSize: 15 }}>
-              Delete
+            <span className="hidden sm:inline ml-1" style={{ fontWeight: 600, fontSize: 15 }}>
+              Clear
             </span>
           </button>
           {/* --- End Clear Canvas Button --- */}
@@ -1361,7 +1377,7 @@ export default function Paint() {
             <span role="img" aria-label="Resize" style={{ fontSize: 20 }}>
               <ImageUpscaleIcon/>
             </span>
-            <span className="hidden sm:inline" style={{ fontSize: 14 }}>
+            <span className="hidden sm:inline ml-1" style={{ fontSize: 14 }}>
               Resize
             </span>
           </button>
@@ -1378,7 +1394,7 @@ export default function Paint() {
             <span role="img" aria-label="Grid lines" style={{ fontSize: 20 }}>
               <Grid2X2Icon />
             </span>
-            <span className="hidden sm:inline" style={{ fontSize: 14 }}>
+            <span className="hidden sm:inline ml-1" style={{ fontSize: 14 }}>
               Grid
             </span>
           </button>
@@ -1432,7 +1448,7 @@ export default function Paint() {
             <span role="img" aria-label="Export" style={{ fontSize: 20 }}>
               <DownloadIcon/>
             </span>
-            <span className="hidden sm:inline" style={{ fontSize: 14 }}>
+            <span className="hidden sm:inline ml-1" style={{ fontSize: 14 }}>
               Export
             </span>
           </button>
@@ -1456,20 +1472,19 @@ export default function Paint() {
             </div>
             <div className="mb-6 text-gray-700 text-center font-mono text-base">
               Are you sure you want to clear the canvas? <br />
-              <span className="text-red-600 font-semibold">This cannot be undone.</span>
             </div>
             <div className="flex gap-4">
               <button
                 onClick={handleClearCanvas}
-                className="px-5 py-2 rounded bg-red-600 text-white font-bold font-mono border border-red-700 shadow hover:bg-red-700 transition"
+                className="px-5 py-2 rounded cursor-pointer bg-red-600 text-white font-bold font-mono border border-red-700 shadow hover:bg-red-700 transition"
                 style={{ fontSize: 16 }}
                 autoFocus
               >
-                Yes, Delete
+                Yes, Clear
               </button>
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className="px-5 py-2 rounded bg-gray-100 text-gray-800 font-mono border border-gray-300 shadow hover:bg-gray-200 transition"
+                className="px-5 py-2 rounded cursor-pointer bg-gray-100 text-gray-800 font-mono border border-gray-300 shadow hover:bg-gray-200 transition"
                 style={{ fontSize: 16 }}
               >
                 Cancel
