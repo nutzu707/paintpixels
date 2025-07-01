@@ -19,6 +19,7 @@ import {
   DiamondIcon,
   // Add Trash2Icon for clear canvas
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 
 const DEFAULT_GRID_WIDTH = 16;
@@ -1333,7 +1334,7 @@ export default function Paint() {
           {/* --- Clear Canvas Button --- */}
           <button
             onClick={() => setShowClearConfirm(true)}
-            className="border rounded ml-2 px-2 py-1 font-mono flex items-center justify-center transition bg-white border-gray-300 hover:bg-red-100 active:bg-red-200"
+            className="border rounded ml-5 px-2 py-1 font-mono flex items-center justify-center transition bg-white border-gray-300 hover:bg-red-100 active:bg-red-200"
             aria-label="Clear canvas"
             style={{
               minWidth: 32,
@@ -1361,7 +1362,7 @@ export default function Paint() {
           </button>
           {/* --- End Clear Canvas Button --- */}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center -ml-2">
           <button
             ref={resizeButtonRef}
             onClick={() => {
@@ -1382,7 +1383,7 @@ export default function Paint() {
             </span>
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center -ml-2">
           <button
             onClick={() => setShowGridLines((v) => !v)}
             className={getTopMenuButtonClass({ selected: showGridLines })}
@@ -1459,33 +1460,40 @@ export default function Paint() {
       {showClearConfirm && (
         <div
           id="clear-canvas-confirm-popup"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
-          style={{ backdropFilter: "blur(1.5px)" }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-white/50"
+          style={{ backdropFilter: "" }}
         >
           <div
-            className="bg-white border-2 border-red-300 rounded-lg shadow-lg flex flex-col items-center px-8 py-6"
+            className="bg-white/95 border-2 border-white rounded shadow-lg flex flex-col items-center px-6 py-4"
             style={{ minWidth: 320, maxWidth: "90vw" }}
           >
-            <div className="flex items-center gap-3 mb-4">
-              <Trash2Icon size={28} color="#b91c1c" />
-              <span className="font-bold text-lg text-red-700">Delete All?</span>
+            <div className="flex gap-2 mb-4 w-full">
+              <span className="text-xs text-gray-700">RESET CANVAS</span>
+              <XIcon
+                className="w-4 h-4 text-gray-700 cursor-pointer ml-auto mr-0"
+                onClick={() => setShowClearConfirm(false)}
+              />
             </div>
-            <div className="mb-6 text-gray-700 text-center font-mono text-base">
-              Are you sure you want to clear the canvas? <br />
+            <div className="mb-2 text-gray-700 font-bold text-center font-mono text-lg">
+              Clear Canvas?
             </div>
-            <div className="flex gap-4">
+            <div className="mb-4 text-gray-700 text-center font-mono text-sm">
+              This will clear the entire canvas. <br />
+            </div>
+            
+            <div className="flex w-full gap-3">
               <button
                 onClick={handleClearCanvas}
-                className="px-5 py-2 rounded cursor-pointer bg-red-600 text-white font-bold font-mono border border-red-700 shadow hover:bg-red-700 transition"
-                style={{ fontSize: 16 }}
+                className="px-5 py-2 rounded text-sm w-full cursor-pointer bg-red-500 text-white font-mono font-bold hover:bg-red-600 transition"
+              
                 autoFocus
               >
-                Yes, Clear
+                Clear
               </button>
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className="px-5 py-2 rounded cursor-pointer bg-gray-100 text-gray-800 font-mono border border-gray-300 shadow hover:bg-gray-200 transition"
-                style={{ fontSize: 16 }}
+                className="px-5 py-2 text-sm rounded w-full cursor-pointer bg-white text-gray-800  font-mono border font-bold hover:bg-gray-100 transition"
+                
               >
                 Cancel
               </button>
