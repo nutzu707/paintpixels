@@ -1615,6 +1615,8 @@ export default function Paint() {
         </div>
         {/* ZOOM CONTROLS REMOVED FROM BOTTOM MENU */}
       </div>
+
+
     </div>
   );
 }
