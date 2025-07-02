@@ -218,8 +218,8 @@ export default function Paint() {
   const [resizeWidth, setResizeWidth] = useState<number>(gridWidth);
   const [resizeHeight, setResizeHeight] = useState<number>(gridHeight);
 
-  const handleResizeWidthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newWidth = clamp(Number(e.target.value), MIN_GRID_SIZE, MAX_GRID_SIZE);
+  const handleResizeWidthChange = (newWidth: number) => {
+    newWidth = clamp(newWidth, MIN_GRID_SIZE, MAX_GRID_SIZE);
     setResizeWidth(newWidth);
     setGridWidth(newWidth);
     setGrid((prevGrid) => resizeGrid(prevGrid, newWidth, gridHeight));
@@ -227,8 +227,9 @@ export default function Paint() {
     redoStack.current = [];
     forceUpdate((v) => v + 1);
   };
-  const handleResizeHeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newHeight = clamp(Number(e.target.value), MIN_GRID_SIZE, MAX_GRID_SIZE);
+
+  const handleResizeHeightChange = (newHeight: number) => {
+    newHeight = clamp(newHeight, MIN_GRID_SIZE, MAX_GRID_SIZE);
     setResizeHeight(newHeight);
     setGridHeight(newHeight);
     setGrid((prevGrid) => resizeGrid(prevGrid, gridWidth, newHeight));
@@ -1674,29 +1675,71 @@ export default function Paint() {
           className="fixed left-1/2 top-20 -translate-x-1/2 z-50 bg-white/60 border-white/80 border-2 rounded flex flex-col p-4 items-center"
         >
           <div className="flex flex-col gap-4 items-center">
-            <label className="font-mono text-sm flex items-center gap-2">
-              <input
-                type="number"
-                min={MIN_GRID_SIZE}
-                max={MAX_GRID_SIZE}
-                value={resizeWidth}
-                onChange={handleResizeWidthChange}
-                className="border rounded px-2 py-1 w-16 text-center"
-                style={{ fontFamily: "inherit" }}
-                aria-label="Grid width"
-              />
+            <div className="font-mono text-sm flex items-center gap-2">
+              <button
+                onClick={() => handleResizeWidthChange(resizeWidth - 1)}
+                className="border rounded px-2 py-1 font-mono flex items-center justify-center transition bg-white border-gray-300 hover:bg-blue-100 active:bg-blue-200"
+                aria-label="Decrease width"
+                style={{
+                  minWidth: 32,
+                  height: 32,
+                  borderRadius: "0.5rem",
+                  outline: "none",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.13)",
+                  cursor: "pointer",
+                }}
+              >
+                -
+              </button>
+              <span className="font-mono text-base">{resizeWidth}</span>
+              <button
+                onClick={() => handleResizeWidthChange(resizeWidth + 1)}
+                className="border rounded px-2 py-1 font-mono flex items-center justify-center transition bg-white border-gray-300 hover:bg-blue-100 active:bg-blue-200"
+                aria-label="Increase width"
+                style={{
+                  minWidth: 32,
+                  height: 32,
+                  borderRadius: "0.5rem",
+                  outline: "none",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.13)",
+                  cursor: "pointer",
+                }}
+              >
+                +
+              </button>
               <span className="font-mono text-base">x</span>
-              <input
-                type="number"
-                min={MIN_GRID_SIZE}
-                max={MAX_GRID_SIZE}
-                value={resizeHeight}
-                onChange={handleResizeHeightChange}
-                className="border rounded px-2 py-1 w-16 text-center"
-                style={{ fontFamily: "inherit" }}
-                aria-label="Grid height"
-              />
-            </label>
+              <button
+                onClick={() => handleResizeHeightChange(resizeHeight - 1)}
+                className="border rounded px-2 py-1 font-mono flex items-center justify-center transition bg-white border-gray-300 hover:bg-blue-100 active:bg-blue-200"
+                aria-label="Decrease height"
+                style={{
+                  minWidth: 32,
+                  height: 32,
+                  borderRadius: "0.5rem",
+                  outline: "none",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.13)",
+                  cursor: "pointer",
+                }}
+              >
+                -
+              </button>
+              <span className="font-mono text-base">{resizeHeight}</span>
+              <button
+                onClick={() => handleResizeHeightChange(resizeHeight + 1)}
+                className="border rounded px-2 py-1 font-mono flex items-center justify-center transition bg-white border-gray-300 hover:bg-blue-100 active:bg-blue-200"
+                aria-label="Increase height"
+                style={{
+                  minWidth: 32,
+                  height: 32,
+                  borderRadius: "0.5rem",
+                  outline: "none",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.13)",
+                  cursor: "pointer",
+                }}
+              >
+                +
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1723,28 +1766,28 @@ export default function Paint() {
                 {exportDisplayWidth}x{exportDisplayHeight}
               </span>
             </label>
-            <button
+              <button
               onClick={handleExportPNG}
               disabled={isExporting}
               className={`border rounded px-4 py-2 font-mono flex items-center gap-2 transition bg-white border-gray-300 hover:bg-blue-100 active:bg-blue-200 ${isExporting ? "opacity-60 cursor-not-allowed" : ""}`}
               aria-label="Export as PNG"
-              style={{
+                style={{
                 minWidth: 80,
                 height: 40,
-                borderRadius: "0.5rem",
+                  borderRadius: "0.5rem",
                 fontWeight: "bold",
-                outline: "none",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.13)",
+                  outline: "none",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.13)",
                 cursor: isExporting ? "not-allowed" : "pointer",
                 fontSize: 16,
-              }}
+                }}
               title="Export as PNG"
-            >
+              >
               <span role="img" aria-label="Export" style={{ fontSize: 20 }}>
                 <DownloadIcon/>
               </span>
               <span>Download PNG</span>
-            </button>
+              </button>
           </div>
         </div>
       )}
@@ -2101,6 +2144,7 @@ export default function Paint() {
       </div>
 
 
+  
 
     </div>
   );
