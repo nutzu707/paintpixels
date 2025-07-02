@@ -17,7 +17,6 @@ import {
   CircleIcon,
   RectangleHorizontalIcon,
   DiamondIcon,
-  // Add Trash2Icon for clear canvas
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -25,7 +24,7 @@ import {
 const DEFAULT_GRID_WIDTH = 16;
 const DEFAULT_GRID_HEIGHT = 16;
 const MIN_GRID_SIZE = 4;
-const MAX_GRID_SIZE = 64;
+const MAX_GRID_SIZE = 512;
 
 const INITIAL_TAILWIND_COLORS = [
   "bg-black",
@@ -194,9 +193,7 @@ export default function Paint() {
   // --- Warn user before leaving or refreshing the page ---
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Show a confirmation dialog
       e.preventDefault();
-      // Chrome requires returnValue to be set
       e.returnValue = "Are you sure you want to leave? All your progress will be lost.";
       return "Are you sure you want to leave? All your progress will be lost.";
     };
@@ -563,12 +560,11 @@ export default function Paint() {
 
   // --- Add clear canvas handler ---
   const handleClearCanvas = useCallback(() => {
-    // Push current grid to undo stack for undo support
     undoStack.current.push(grid.map((row) => [...row]));
     redoStack.current = [];
     setGrid(createGrid(gridWidth, gridHeight));
     forceUpdate((v) => v + 1);
-    setShowClearConfirm(false); // Hide confirmation after clearing
+    setShowClearConfirm(false);
   }, [grid, gridWidth, gridHeight]);
   // ---
 
@@ -776,11 +772,9 @@ export default function Paint() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showShapeMenu]);
 
-  // --- Dismiss clear confirm popup on outside click ---
   useEffect(() => {
     if (!showClearConfirm) return;
     function handleClickOutside(e: MouseEvent) {
-      // Only close if click is outside the popup
       const popup = document.getElementById("clear-canvas-confirm-popup");
       if (popup && !popup.contains(e.target as Node)) {
         setShowClearConfirm(false);
@@ -922,6 +916,7 @@ export default function Paint() {
         const w = cellEdgesX[col + 1] - cellEdgesX[col];
         const h = cellEdgesY[row + 1] - cellEdgesY[row];
         if (color === "transparent") {
+          // Do nothing, leave pixel transparent
           continue;
         } else {
           ctx.fillStyle = tailwindClassToHex(color);
@@ -1039,123 +1034,182 @@ export default function Paint() {
     );
   }
 
-  function renderCanvasCells() {
-    const shapePreviewCells: Set<string> = new Set();
-    if (
-      tool === "shape" &&
-      shapeDrag.preview &&
-      shapeDrag.start &&
-      shapeDrag.end
-    ) {
-      for (const cell of getShapeCells(shapeDrag.start, shapeDrag.end, shapeType)) {
-        shapePreviewCells.add(`${cell.row},${cell.col}`);
+  // --- CANVAS RENDERING WITH <canvas> ELEMENT ---
+  // Instead of rendering a grid of divs, we use a single <canvas> for performance.
+  // We still need to map mouse events to grid cells.
+
+  const canvasElementRef = useRef<HTMLCanvasElement>(null);
+
+  // Used to force a re-render when grid changes (for hover/shape preview)
+  const [, forceCanvasUpdate] = useState(0);
+
+  // --- HIGH-DPI/SHARP CANVAS RENDERING ---
+  // We want the canvas to always render at devicePixelRatio * display size, so it stays sharp at all zooms.
+
+  // Compute device pixel ratio (for sharp canvas)
+  const [devicePixelRatio, setDevicePixelRatio] = useState(() => (typeof window !== "undefined" ? window.devicePixelRatio : 1));
+  useEffect(() => {
+    function updateDPR() {
+      setDevicePixelRatio(window.devicePixelRatio || 1);
+    }
+    updateDPR();
+    window.addEventListener("resize", updateDPR);
+    window.addEventListener("orientationchange", updateDPR);
+    return () => {
+      window.removeEventListener("resize", updateDPR);
+      window.removeEventListener("orientationchange", updateDPR);
+    };
+  }, []);
+
+  // Redraw the canvas whenever grid, hover, or shape preview changes
+  useEffect(() => {
+    const canvas = canvasElementRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Calculate the display size (CSS pixels)
+    const displayWidth = canvasWidth;
+    const displayHeight = canvasHeight;
+
+    // Calculate the actual pixel size (for sharpness)
+    const dpr = devicePixelRatio || 1;
+    // The canvas will always be rendered at dpr * display size, so it stays sharp at all zooms
+    canvas.width = Math.round(displayWidth * dpr);
+    canvas.height = Math.round(displayHeight * dpr);
+
+    // Set the CSS size (matches the display size, not affected by zoom)
+    canvas.style.width = `${displayWidth}px`;
+    canvas.style.height = `${displayHeight}px`;
+
+    // Scale the context so drawing is sharp
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+    ctx.scale(dpr, dpr);
+
+    // Draw transparent background (now: just clear, so it's see-through)
+    ctx.clearRect(0, 0, displayWidth, displayHeight);
+
+    // Draw grid cells
+    for (let row = 0; row < gridHeight; row++) {
+      for (let col = 0; col < gridWidth; col++) {
+        let color = grid[row][col];
+        let isShapePreview = false;
+        // Shape preview
+        if (
+          tool === "shape" &&
+          shapeDrag.preview &&
+          shapeDrag.start &&
+          shapeDrag.end
+        ) {
+          const shapeCells = getShapeCells(shapeDrag.start, shapeDrag.end, shapeType);
+          if (shapeCells.some((cell) => cell.row === row && cell.col === col)) {
+            color = selectedColor;
+            isShapePreview = true;
+          }
+        }
+        // Hover preview (brush/eraser)
+        let isHovered = false;
+        if (tool !== "shape" && isCellHovered(row, col)) {
+          isHovered = true;
+        }
+        if (color !== "transparent" || isShapePreview || isHovered) {
+          ctx.save();
+          if (isShapePreview) {
+            ctx.globalAlpha = 0.7;
+            ctx.filter = "brightness(1.08)";
+          } else if (isHovered) {
+            ctx.globalAlpha = tool === "eraser" ? 0.3 : 0.6;
+            ctx.filter = "brightness(1.08)";
+          } else {
+            ctx.globalAlpha = 1;
+            ctx.filter = "none";
+          }
+          ctx.fillStyle = tailwindClassToHex(color !== "transparent" ? color : selectedColor);
+          // Compute cell rect
+          const x = Math.round((col * displayWidth) / gridWidth);
+          const y = Math.round((row * displayHeight) / gridHeight);
+          const w = Math.round(((col + 1) * displayWidth) / gridWidth) - x;
+          const h = Math.round(((row + 1) * displayHeight) / gridHeight) - y;
+          ctx.fillRect(x, y, w, h);
+          ctx.restore();
+        }
       }
     }
 
+    // Draw grid lines if enabled
     if (showGridLines) {
-      return grid.map((row, rowIdx) =>
-        row.map((color, colIdx) => {
-          const isTransparent = color === "transparent";
-          const isCustom = color.startsWith("#");
-          const isShapePreview =
-            tool === "shape" &&
-            shapeDrag.preview &&
-            shapePreviewCells.has(`${rowIdx},${colIdx}`);
-          return (
-            <div
-              key={`${rowIdx}-${colIdx}`}
-              onMouseDown={() => handleCellMouseDown(rowIdx, colIdx)}
-              onMouseEnter={() => handleCellMouseEnter(rowIdx, colIdx)}
-              onMouseLeave={() => handleCellMouseLeave(rowIdx, colIdx)}
-              onMouseUp={
-                tool === "shape"
-                  ? () => handleShapeCellMouseUp(rowIdx, colIdx)
-                  : undefined
-              }
-              className={`transition-colors duration-100 box-border ${getCellBorderClasses(rowIdx, colIdx)} ${isTransparent
-                ? "bg-[repeating-conic-gradient(theme(colors.gray.200)_0%_25%,white_0%_50%)_50%_/_16px_16px]"
-                : (!isCustom ? color : "")
-              }`}
-              style={{
-                width: "100%",
-                height: "100%",
-                aspectRatio: "1 / 1",
-                pointerEvents: (tool === "pan" || isPanMode) ? "none" : "auto",
-                ...(color.startsWith("#") ? { backgroundColor: color } : {}),
-                ...(isShapePreview
-                  ? {
-                      backgroundColor: tailwindClassToHex(selectedColor),
-                      opacity: 0.7,
-                      filter: "brightness(1.08)",
-                      transition: "background-color 0.12s, opacity 0.12s, filter 0.12s",
-                    }
-                  : getCellHoverStyle(rowIdx, colIdx, color)),
-              }}
-              draggable={false}
-            />
-          );
-        })
-      );
-    } else {
-      return grid.map((row, rowIdx) => (
-        <div
-          key={`row-${rowIdx}`}
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            width: "100%",
-            height: `${100 / gridHeight}%`,
-          }}
-        >
-          {row.map((color, colIdx) => {
-            const isTransparent = color === "transparent";
-            const isCustom = color.startsWith("#");
-            const isShapePreview =
-              tool === "shape" &&
-              shapeDrag.preview &&
-              shapePreviewCells.has(`${rowIdx},${colIdx}`);
-            return (
-              <div
-                key={`${rowIdx}-${colIdx}`}
-                onMouseDown={() => handleCellMouseDown(rowIdx, colIdx)}
-                onMouseEnter={() => handleCellMouseEnter(rowIdx, colIdx)}
-                onMouseLeave={() => handleCellMouseLeave(rowIdx, colIdx)}
-                onMouseUp={
-                  tool === "shape"
-                    ? () => handleShapeCellMouseUp(rowIdx, colIdx)
-                    : undefined
-                }
-                className={`transition-colors duration-100 ${isTransparent
-                  ? "bg-[repeating-conic-gradient(theme(colors.gray.200)_0%_25%,white_0%_50%)_50%_/_16px_16px]"
-                  : (!isCustom ? color : "")
-                }`}
-                style={{
-                  width: `${100 / gridWidth}%`,
-                  height: "100%",
-                  aspectRatio: "1 / 1",
-                  pointerEvents: (tool === "pan" || isPanMode) ? "none" : "auto",
-                  ...(color.startsWith("#") ? { backgroundColor: color } : {}),
-                  ...(isShapePreview
-                    ? {
-                        backgroundColor: tailwindClassToHex(selectedColor),
-                        opacity: 0.7,
-                        filter: "brightness(1.08)",
-                        transition: "background-color 0.12s, opacity 0.12s, filter 0.12s",
-                      }
-                    : getCellHoverStyle(rowIdx, colIdx, color)),
-                  display: "block",
-                  margin: 0,
-                  padding: 0,
-                  boxSizing: "border-box",
-                }}
-                draggable={false}
-              />
-            );
-          })}
-        </div>
-      ));
+      ctx.save();
+      ctx.strokeStyle = "#d1d5db";
+      ctx.lineWidth = 1;
+      for (let c = 1; c < gridWidth; c++) {
+        const x = Math.round((c * displayWidth) / gridWidth) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, displayHeight);
+        ctx.stroke();
+      }
+      for (let r = 1; r < gridHeight; r++) {
+        const y = Math.round((r * displayHeight) / gridHeight) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(displayWidth, y);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
+  }, [
+    grid,
+    gridWidth,
+    gridHeight,
+    canvasWidth,
+    canvasHeight,
+    showGridLines,
+    hoverCell,
+    tool,
+    brushSize,
+    selectedColor,
+    shapeDrag,
+    shapeType,
+    devicePixelRatio,
+  ]);
+
+  // Helper: get cell from mouse event
+  function getCellFromEvent(e: React.MouseEvent<HTMLCanvasElement, MouseEvent>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * gridWidth;
+    const y = ((e.clientY - rect.top) / rect.height) * gridHeight;
+    const col = clamp(Math.floor(x), 0, gridWidth - 1);
+    const row = clamp(Math.floor(y), 0, gridHeight - 1);
+    return { row, col };
   }
+
+  // Mouse event handlers for canvas
+  const handleCanvasPointerDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (tool === "pan" || isPanMode) return;
+    const { row, col } = getCellFromEvent(e);
+    handleCellMouseDown(row, col);
+  };
+  const handleCanvasPointerMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (tool === "pan" || isPanMode) return;
+    const { row, col } = getCellFromEvent(e);
+    handleCellMouseEnter(row, col);
+    forceCanvasUpdate((v) => v + 1); // For hover
+  };
+  const handleCanvasPointerLeave = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleMouseLeave();
+    forceCanvasUpdate((v) => v + 1);
+  };
+  const handleCanvasPointerUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (tool === "pan" || isPanMode) return;
+    const { row, col } = getCellFromEvent(e);
+    handleMouseUp();
+    if (tool === "shape") {
+      handleShapeCellMouseUp(row, col);
+    }
+    forceCanvasUpdate((v) => v + 1);
+  };
+
+  // For accessibility: keyboard navigation (optional, not implemented here)
 
   function getBrushSizeIcon(size: number) {
     if (size === 1) return <SquareIcon size={26} />;
@@ -1203,9 +1257,7 @@ export default function Paint() {
       default:
         selectedBg = "bg-white";
         selectedBorder = "border-gray-200";
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         hoverBg = "bg-blue-100";
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         hoverBorder = "border-blue-300";
     }
     return `border rounded px-3 py-1 font-mono flex items-center gap-2 transition group ${selected ? `${selectedBg} ${selectedBorder}` : `bg-white border-gray-200`}`;
@@ -1294,6 +1346,8 @@ export default function Paint() {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center min-h-screen">
       <div className="fixed left-1/2 top-2 rounded -translate-x-1/2 h-16 bg-white/60 border-white/80 border-2 flex items-center justify-center gap-4 px-4 z-40">
+        {/* ... top menu unchanged ... */}
+        {/* ... (same as before) ... */}
         <div className="flex items-center gap-2">
           <button
             onClick={handleUndo}
@@ -1360,8 +1414,8 @@ export default function Paint() {
               Clear
             </span>
           </button>
-          {/* --- End Clear Canvas Button --- */}
         </div>
+        {/* ... rest of top menu unchanged ... */}
         <div className="flex items-center -ml-2">
           <button
             ref={resizeButtonRef}
@@ -1493,7 +1547,7 @@ export default function Paint() {
               <button
                 onClick={() => setShowClearConfirm(false)}
                 className="px-5 py-2 text-sm rounded w-full cursor-pointer bg-white text-gray-800  font-mono border font-bold hover:bg-gray-100 transition"
-                
+
               >
                 Cancel
               </button>
@@ -1501,7 +1555,6 @@ export default function Paint() {
           </div>
         </div>
       )}
-      {/* --- End Clear Canvas Confirmation Popup --- */}
 
       {showResizeMenu && (
         <div
@@ -1666,18 +1719,7 @@ export default function Paint() {
       <div className="flex flex-1 items-center justify-center">
         <div
           ref={canvasRef}
-          className={showGridLines ? "grid " : ""}
           style={{
-            ...(showGridLines
-              ? {
-                  display: "grid",
-                  gridTemplateRows: `repeat(${gridHeight}, 1fr)`,
-                  gridTemplateColumns: `repeat(${gridWidth}, 1fr)`,
-                }
-              : {
-                  display: "flex",
-                  flexDirection: "column",
-                }),
             width: `${canvasWidth}px`,
             height: `${canvasHeight}px`,
             background: "transparent",
@@ -1693,6 +1735,9 @@ export default function Paint() {
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             transition: isPanning ? "none" : "transform 0.15s cubic-bezier(.4,2,.6,1)",
             transformOrigin: "center center",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
           onWheel={handleWheel}
           tabIndex={0}
@@ -1702,10 +1747,37 @@ export default function Paint() {
           onMouseDown={(tool === "pan" || isPanMode) ? handleCanvasMouseDown : undefined}
           onMouseMove={(tool === "pan" || isPanMode) ? handleCanvasMouseMove : undefined}
         >
-          {renderCanvasCells()}
+          {/* --- The performant canvas element --- */}
+          <canvas
+            ref={canvasElementRef}
+            // width and height are set in the effect for sharpness, but set here for SSR fallback
+            width={canvasWidth}
+            height={canvasHeight}
+            style={{
+              width: `${canvasWidth}px`,
+              height: `${canvasHeight}px`,
+              display: "block",
+              cursor:
+                (tool === "pan" || isPanMode)
+                  ? (isPanning ? "grabbing" : "grab")
+                  : (tool === "fill" || tool === "shape"
+                    ? "crosshair"
+                    : "crosshair"),
+              imageRendering: "pixelated", // ensure sharp edges
+              background: "transparent",
+            }}
+            tabIndex={0}
+            aria-label="Paint canvas"
+            onMouseDown={handleCanvasPointerDown}
+            onMouseMove={handleCanvasPointerMove}
+            onMouseLeave={handleCanvasPointerLeave}
+            onMouseUp={handleCanvasPointerUp}
+            draggable={false}
+          />
         </div>
       </div>
 
+      {/* ... color palette and bottom menu unchanged ... */}
       {showColorPalette && (
         <div
           ref={paletteRef}
@@ -1910,12 +1982,6 @@ export default function Paint() {
           </button>
         </div>
       </div>
-
-
-
-      {/* --- END BOTTOM MENU --- */}
-
-
     </div>
   );
 }
