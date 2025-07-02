@@ -186,11 +186,9 @@ export default function Paint() {
   const dragStartGrid = useRef<string[][] | null>(null);
   const isDragPainting = useRef<boolean>(false);
 
-  // --- Add state for clear canvas confirmation ---
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  // ---
 
-  // --- Warn user before leaving or refreshing the page ---
+
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
@@ -202,7 +200,6 @@ export default function Paint() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
   }, []);
-  // ---
 
   const pushUndo = useCallback((newGrid: string[][]) => {
     undoStack.current.push(grid.map((row) => [...row]));
@@ -639,6 +636,156 @@ export default function Paint() {
     });
   };
 
+  // --- TOUCH SUPPORT FOR CANVAS DRAWING AND PANNING ---
+  // We add touch event handlers for the canvas element.
+  // These will map touch events to the same logic as mouse events.
+
+  // Used to track touch state
+  const touchState = useRef<{
+    isTouching: boolean;
+    lastRow: number | null;
+    lastCol: number | null;
+    panStart: { x: number; y: number } | null;
+    panTouchStart: { x: number; y: number } | null;
+    isPanning: boolean;
+    tool: Tool;
+  }>({
+    isTouching: false,
+    lastRow: null,
+    lastCol: null,
+    panStart: null,
+    panTouchStart: null,
+    isPanning: false,
+    tool: "pen",
+  });
+
+  // Helper: get cell from touch event
+  function getCellFromTouchEvent(e: TouchEvent | React.TouchEvent<HTMLCanvasElement>) {
+    const canvas = canvasElementRef.current;
+    if (!canvas) return { row: 0, col: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const touch = (e as TouchEvent).touches
+      ? (e as TouchEvent).touches[0]
+      : (e as React.TouchEvent<HTMLCanvasElement>).touches[0];
+    if (!touch) return { row: 0, col: 0 };
+    const x = ((touch.clientX - rect.left) / rect.width) * gridWidth;
+    const y = ((touch.clientY - rect.top) / rect.height) * gridHeight;
+    const col = clamp(Math.floor(x), 0, gridWidth - 1);
+    const row = clamp(Math.floor(y), 0, gridHeight - 1);
+    return { row, col };
+  }
+
+  // Touch event handlers for canvas
+  const handleCanvasTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length > 1) {
+      // Multi-touch: treat as pan
+      if (tool === "pan" || isPanMode) {
+        touchState.current.isPanning = true;
+        touchState.current.panStart = { ...pan };
+        touchState.current.panTouchStart = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+        };
+      }
+      return;
+    }
+    // Single touch
+    const { row, col } = getCellFromTouchEvent(e);
+    touchState.current.isTouching = true;
+    touchState.current.lastRow = row;
+    touchState.current.lastCol = col;
+    touchState.current.tool = tool;
+    if (tool === "pan" || isPanMode) {
+      touchState.current.isPanning = true;
+      touchState.current.panStart = { ...pan };
+      touchState.current.panTouchStart = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+    } else {
+      handleCellMouseDown(row, col);
+    }
+    // Prevent scrolling
+    e.preventDefault();
+  };
+
+  const handleCanvasTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length > 1) {
+      // Multi-touch: treat as pan
+      if ((tool === "pan" || isPanMode) && touchState.current.isPanning && touchState.current.panStart && touchState.current.panTouchStart) {
+        const dx = e.touches[0].clientX - touchState.current.panTouchStart.x;
+        const dy = e.touches[0].clientY - touchState.current.panTouchStart.y;
+        let newX = touchState.current.panStart.x + dx;
+        let newY = touchState.current.panStart.y + dy;
+        const { minX, maxX, minY, maxY } = getPanBounds(zoom);
+        newX = clamp(newX, minX, maxX);
+        newY = clamp(newY, minY, maxY);
+        setPan({
+          x: newX,
+          y: newY,
+        });
+      }
+      e.preventDefault();
+      return;
+    }
+    if (!touchState.current.isTouching) return;
+    const { row, col } = getCellFromTouchEvent(e);
+    // Only call if cell changed
+    if (row !== touchState.current.lastRow || col !== touchState.current.lastCol) {
+      handleCellMouseEnter(row, col);
+      touchState.current.lastRow = row;
+      touchState.current.lastCol = col;
+    }
+    // Prevent scrolling
+    e.preventDefault();
+  };
+
+  const handleCanvasTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (touchState.current.isPanning) {
+      touchState.current.isPanning = false;
+      touchState.current.panStart = null;
+      touchState.current.panTouchStart = null;
+      setIsPanning(false);
+      return;
+    }
+    if (!touchState.current.isTouching) return;
+    touchState.current.isTouching = false;
+    // On touch end, get the last cell
+    let row = touchState.current.lastRow;
+    let col = touchState.current.lastCol;
+    if (typeof row !== "number" || typeof col !== "number") {
+      // fallback: get from changedTouches
+      if (e.changedTouches && e.changedTouches.length > 0) {
+        const canvas = canvasElementRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const touch = e.changedTouches[0];
+          const x = ((touch.clientX - rect.left) / rect.width) * gridWidth;
+          const y = ((touch.clientY - rect.top) / rect.height) * gridHeight;
+          col = clamp(Math.floor(x), 0, gridWidth - 1);
+          row = clamp(Math.floor(y), 0, gridHeight - 1);
+        }
+      }
+    }
+    handleMouseUp();
+    if (tool === "shape" && typeof row === "number" && typeof col === "number") {
+      handleShapeCellMouseUp(row, col);
+    }
+    setHoverCell(null);
+    // Prevent scrolling
+    e.preventDefault();
+  };
+
+  const handleCanvasTouchCancel = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    touchState.current.isTouching = false;
+    touchState.current.isPanning = false;
+    setIsPanning(false);
+    setHoverCell(null);
+    e.preventDefault();
+  };
+
+  // --- END TOUCH SUPPORT ---
+
   useEffect(() => {
     const { minX, maxX, minY, maxY } = getPanBounds(zoom);
     setPan((prev) => ({
@@ -681,8 +828,23 @@ export default function Paint() {
       mouseStart.current = null;
     };
     window.addEventListener("mouseup", handleGlobalMouseUp);
+    // Touch: handle global touchend to end painting if finger leaves canvas
+    const handleGlobalTouchEnd = () => {
+      if (touchState.current.isTouching) {
+        handleMouseUp();
+        touchState.current.isTouching = false;
+      }
+      if (touchState.current.isPanning) {
+        setIsPanning(false);
+        touchState.current.isPanning = false;
+      }
+    };
+    window.addEventListener("touchend", handleGlobalTouchEnd);
+    window.addEventListener("touchcancel", handleGlobalTouchEnd);
     return () => {
       window.removeEventListener("mouseup", handleGlobalMouseUp);
+      window.removeEventListener("touchend", handleGlobalTouchEnd);
+      window.removeEventListener("touchcancel", handleGlobalTouchEnd);
     };
   }, [grid, gridWidth, gridHeight, pushGroupedUndo, tool, shapeDrag]);
 
@@ -1366,7 +1528,6 @@ export default function Paint() {
             </span>
           </button>
         </div>
-        {/* ... rest of top menu unchanged ... */}
         <div className="flex items-center -ml-2">
           <button
             ref={resizeButtonRef}
@@ -1716,6 +1877,7 @@ export default function Paint() {
                     : "crosshair"),
               imageRendering: "pixelated", // ensure sharp edges
               background: "transparent",
+              touchAction: "none", // Prevent browser scrolling on touch
             }}
             tabIndex={0}
             aria-label="Paint canvas"
@@ -1724,11 +1886,15 @@ export default function Paint() {
             onMouseLeave={handleCanvasPointerLeave}
             onMouseUp={handleCanvasPointerUp}
             draggable={false}
+            // --- Touch event handlers for mobile/tablet drawing ---
+            onTouchStart={handleCanvasTouchStart}
+            onTouchMove={handleCanvasTouchMove}
+            onTouchEnd={handleCanvasTouchEnd}
+            onTouchCancel={handleCanvasTouchCancel}
           />
         </div>
       </div>
 
-      {/* ... color palette and bottom menu unchanged ... */}
       {showColorPalette && (
         <div
           ref={paletteRef}
@@ -1933,6 +2099,9 @@ export default function Paint() {
           </button>
         </div>
       </div>
+
+
+
     </div>
   );
 }
