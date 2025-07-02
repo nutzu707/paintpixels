@@ -468,12 +468,7 @@ export default function Paint() {
     setHoverCell({ row, col });
   };
 
-  const handleCellMouseLeave = (row: number, col: number) => {
-    setHoverCell((prev) => {
-      if (prev && prev.row === row && prev.col === col) return null;
-      return prev;
-    });
-  };
+  
 
   const handleMouseUp = () => {
     if (tool === "shape") {
@@ -812,13 +807,8 @@ export default function Paint() {
     };
   }, [grid, handleUndo, handleRedo]);
 
-  function getCellBorderClasses(rowIdx: number, colIdx: number) {
-    if (!showGridLines) return "";
-    let classes = "";
-    if (colIdx < gridWidth - 1) classes += " border-r border-gray-300";
-    if (rowIdx < gridHeight - 1) classes += " border-b border-gray-300";
-    return classes;
-  }
+ 
+  
 
   function getColorButtonBorderClass(color: string) {
     return selectedColor === color
@@ -837,49 +827,7 @@ export default function Paint() {
     return row >= startRow && row <= endRow && col >= startCol && col <= endCol;
   }
 
-  function getCellHoverStyle(row: number, col: number, color: string) {
-    if (
-      tool === "shape" &&
-      shapeDrag.preview &&
-      shapeDrag.start &&
-      shapeDrag.end
-    ) {
-      const shapeCells = getShapeCells(shapeDrag.start, shapeDrag.end, shapeType);
-      if (shapeCells.some((cell) => cell.row === row && cell.col === col)) {
-        return {
-          backgroundColor: tailwindClassToHex(selectedColor),
-          opacity: 0.7,
-          filter: "brightness(1.08)",
-          transition: "background-color 0.12s, opacity 0.12s, filter 0.12s",
-        };
-      }
-    }
-    if (!isCellHovered(row, col)) return {};
-    if (tool === "eraser") {
-      return {
-        opacity: 0.3,
-        transition: "opacity 0.12s",
-      };
-    }
-    const baseColor = tailwindClassToHex(selectedColor);
-    const style: React.CSSProperties = {
-      backgroundColor: baseColor,
-      opacity: 0.6,
-      transition: "background-color 0.12s, opacity 0.12s, filter 0.12s",
-      filter: "brightness(1.08)",
-    };
-    if (color === "transparent") {
-      style.backgroundColor = baseColor;
-      style.opacity = .9;
-      style.filter = "brightness(1.08)";
-    }
-    else {
-      style.backgroundColor = baseColor;
-      style.opacity = .9;
-      style.filter = "brightness(1.08)";
-    }
-    return style;
-  }
+  
 
   function handleExportPNG() {
     setIsExporting(true);
@@ -1195,6 +1143,7 @@ export default function Paint() {
     handleCellMouseEnter(row, col);
     forceCanvasUpdate((v) => v + 1); // For hover
   };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleCanvasPointerLeave = (e: React.MouseEvent<HTMLCanvasElement>) => {
     handleMouseLeave();
     forceCanvasUpdate((v) => v + 1);
@@ -1257,7 +1206,9 @@ export default function Paint() {
       default:
         selectedBg = "bg-white";
         selectedBorder = "border-gray-200";
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         hoverBg = "bg-blue-100";
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         hoverBorder = "border-blue-300";
     }
     return `border rounded px-3 py-1 font-mono flex items-center gap-2 transition group ${selected ? `${selectedBg} ${selectedBorder}` : `bg-white border-gray-200`}`;
